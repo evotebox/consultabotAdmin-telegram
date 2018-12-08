@@ -1,7 +1,7 @@
 {
   "name": "consultabotadmin-telegram",
   "version": "1.0.0",
-  "description": "",
+  "description": "ConsultaBOT Admin",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,9 +11,13 @@
     "url": "git+https://github.com/evotebox/consultabotAdmin-telegram.git"
   },
   "author": "",
-  "license": "GNU",
+  "license": "GPL-3.0-or-later",
   "bugs": {
     "url": "https://github.com/evotebox/consultabotAdmin-telegram/issues"
   },
-  "homepage": "https://github.com/evotebox/consultabotAdmin-telegram#readme"
+  "homepage": "https://github.com/evotebox/consultabotAdmin-telegram#readme",
+  "dependencies": {
+    "bcrypt": "^3.0.2",
+    "telegraf": "^3.25.5"
+  }
 }
