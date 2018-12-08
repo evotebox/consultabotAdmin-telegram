@@ -45,7 +45,6 @@ dni.on('message', (ctx) => {
     ctx.session.messageIDs.push(ctx.message.message_id);
     if (validateID(dniRaw)) {
         Bcrypt.hash(ctx.message.text, 10, function (err, hash) {
-            ctx.reply("Identificador validado.");
             ctx.session.dni = ctx.message.text;
             ctx.session.cypID = hash;
             ctx.scene.enter('email');
@@ -71,7 +70,6 @@ email.on('message', (ctx) => {
     ctx.session.messageIDs.push(ctx.message.message_id);
     if (_.contains(Admins, ctx.message.from.id)) {
         if (EmailValidator.validate(ctx.message.text)) {
-            ctx.reply("Email validado. Registrando votante...");
             ctx.session.email = ctx.message.text;
             ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text);
             ctx.scene.enter('verify');
