@@ -43,7 +43,7 @@ dni.on('message', (ctx) => {
     let dniRaw = ctx.message.text;
     if (validateID(dniRaw)) {
         ctx.session.dni = ctx.message.text;
-        ctx.session.cypID = CryptoJS.SHA3(ctx.message.text);
+        ctx.session.cypID = CryptoJS.SHA3(ctx.message.text.toUpperCase());
 
         //Let's check if DNI exists...
         let docClient = new AWS.DynamoDB;
@@ -141,7 +141,8 @@ verify.on('callback_query', ctx => {
             TableName: 'voter_email',
             Item: {
                 "user": ctx.session.cypEmail.toString(),
-                "nid": ctx.session.cypID.toString()
+                "nid": ctx.session.cypID.toString(),
+                "has_voted": 0
             }
         };
 
