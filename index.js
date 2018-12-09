@@ -3,12 +3,13 @@ const session = require('telegraf/session');
 const Stage = require('telegraf/stage');
 const Extra = require('telegraf/extra');
 const Scene = require('telegraf/scenes/base');
-const Bcrypt = require('bcrypt');
 const CryptoJS = require("crypto-js");
 const _ = require('underscore');
 const EmailValidator = require("email-validator");
+const AWS = require('aws-sdk');
 const {leave} = Stage;
 const Admins = process.env.ADMIN_ID_LIST.split(',').map(Number);
+AWS.config.update({region: 'eu-west-1'});
 
 
 /////////////////////////////// Greeter Scene
@@ -20,8 +21,6 @@ greeter.enter((ctx) => {
 
     if (_.contains(Admins, ctx.message.from.id)) {
         ctx.reply("Bienvenidx admin.\nPor favor usa este bot de forma segura.");
-        ctx.session.messageIDs = [];
-        ctx.session.messageIDs.push(ctx.message.message_id);
         ctx.scene.enter('dni');
     } else {
         ctx.reply("No autorizado.")
@@ -42,12 +41,32 @@ dni.enter((ctx) => {
 
 dni.on('message', (ctx) => {
     let dniRaw = ctx.message.text;
-    ctx.session.messageIDs.push(ctx.message.message_id);
     if (validateID(dniRaw)) {
-        Bcrypt.hash(ctx.message.text, 10, function (err, hash) {
-            ctx.session.dni = ctx.message.text;
-            ctx.session.cypID = hash;
-            ctx.scene.enter('email');
+        ctx.session.dni = ctx.message.text;
+        ctx.session.cypID = CryptoJS.SHA3(ctx.message.text);
+
+        //Let's check if DNI exists...
+        let docClient = new AWS.DynamoDB;
+        let query = {
+            TableName: "voter_email",
+            IndexName: "nid-index",
+            KeyConditionExpression: "nid = :nid",
+            ExpressionAttributeValues: {
+                ":nid": {"S": ctx.session.cypID.toString()}
+            }
+        };
+
+        docClient.query(query, function (err, data) {
+            console.log(JSON.stringify(data));
+            if (err) {
+                console.error("[INFO] - NID unable to query. Error:", JSON.stringify(err, null, 2));
+            } else if (data.Count > 0) {
+                console.log("[INFO] - National ID number found. User can't be registered.");
+                ctx.reply("NIF/NIE ya registrado. Este usuario no puede volver a ser registrado. Introduce otro NIF/NIE.")
+            } else if (data.Count === 0) {
+                console.log("[INFO] - National ID not found, proceed...");
+                ctx.scene.enter('email');
+            }
         });
     } else {
         ctx.reply("NIF/NIE incorrecto, verifica que lo has introducido correctamente (incluye la letra).")
@@ -67,12 +86,29 @@ email.enter((ctx) => {
 });
 
 email.on('message', (ctx) => {
-    ctx.session.messageIDs.push(ctx.message.message_id);
     if (_.contains(Admins, ctx.message.from.id)) {
         if (EmailValidator.validate(ctx.message.text)) {
             ctx.session.email = ctx.message.text;
             ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text);
-            ctx.scene.enter('verify');
+
+            let docClient = new AWS.DynamoDB;
+            let query = {
+                TableName: "voter_email",
+                Key: {
+                    'user': {"S": ctx.session.cypEmail.toString()},
+                }
+            };
+            docClient.getItem(query, function (err, data) {
+                if (err) {
+                    console.error("[INFO] - Email unable to query. Error:", JSON.stringify(err, null, 2));
+                } else if (data.Item) {
+                    console.log("[INFO] - Email already exists...");
+                    ctx.reply("Este email ya existe en la base de datos. Introduce otro email.")
+                } else {
+
+                    ctx.scene.enter('verify');
+                }
+            });
         } else {
             ctx.reply("Email incorrecto. Verifica que lo has escrito correctamente.")
         }
@@ -100,26 +136,24 @@ verify.on('callback_query', ctx => {
     if (_.isEqual("Sí", ctx.callbackQuery.data)) {
         ctx.answerCbQuery("Sí");
 
+        let docClient = new AWS.DynamoDB.DocumentClient();
+        let item = {
+            TableName: 'voter_email',
+            Item: {
+                "user": ctx.session.cypEmail.toString(),
+                "nid": ctx.session.cypID.toString()
+            }
+        };
 
-        //TODO: Insert new voter in census
-        // let docClient = new AWS.DynamoDB.DocumentClient();
-        // let item = {
-        //     TableName: 'voter_email',
-        //     Item: {
-        //         "user": ctx.session.emailUser,
-        //         "has_voted": 1
-        //     }
-        // };
-        //
-        // console.log("Adding a new item...");
-        // docClient.put(item, function (err, data) {
-        //     if (err) {
-        //         console.error("Unable to add item. Error JSON:", JSON.stringify(err, null, 2));
-        //     } else {
-        //         console.log("Added item:", JSON.stringify(data, null, 2));
-        //     }
-        // });
-        ctx.reply("Usuario correctamente registrado. Por seguridad, borra el historial de esta conversación.");
+        console.log("Adding a new item...");
+        docClient.put(item, function (err, data) {
+            if (err) {
+                console.error("Unable to add item. Error JSON:", JSON.stringify(err, null, 2));
+            } else {
+                console.log("Added item:", JSON.stringify(data, null, 2));
+            }
+        });
+        ctx.reply("Usuario correctamente registrado. Por seguridad, borra el historial de esta conversación.\nPulsa /start para volver a empezar");
     } else {
         ctx.answerCbQuery("No");
         ctx.scene.enter('dni')
