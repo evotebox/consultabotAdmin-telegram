@@ -19,12 +19,20 @@ greeter.enter((ctx) => {
     console.log("[INFO] - User ID: " + ctx.message.from.id);
     console.log(Admins);
 
-    if (_.contains(Admins, ctx.message.from.id)) {
-        ctx.reply("Bienvenidx admin.\nPor favor usa este bot de forma segura.");
-        ctx.scene.enter('dni');
+    if (ctx.message && ctx.message.from && ctx.message.from.id) {
+
+        if (_.contains(Admins, ctx.message.from.id)) {
+            ctx.reply("Bienvenidx admin.\nPor favor usa este bot de forma segura.");
+            ctx.scene.enter('dni');
+        } else {
+            ctx.reply("No autorizado.")
+        }
+
     } else {
-        ctx.reply("No autorizado.")
+        console.error("User ID not found. can't proceed.");
+        ctx.reply("Parece que no puedo encontrar tu ID de usuario. Vuelve a intentarlo en unos instantes")
     }
+
 });
 ///////////////////////////////
 
@@ -32,11 +40,20 @@ greeter.enter((ctx) => {
 /////////////////////////////// DNI Scene
 const dni = new Scene('dni');
 dni.enter((ctx) => {
-    if (_.contains(Admins, ctx.message.from.id)) {
-        ctx.reply("Introduce NIF/NIE del votante.");
+
+    if (ctx.message && ctx.message.from && ctx.message.from.id) {
+        if (_.contains(Admins, ctx.message.from.id)) {
+            ctx.reply("Introduce NIF/NIE del votante.");
+        } else {
+            ctx.reply("No autorizado.")
+        }
+
     } else {
-        ctx.reply("No autorizado.")
+        console.error("User ID not found. can't proceed.");
+        ctx.reply("Parece que no puedo encontrar tu ID de usuario. Vuelve a intentarlo en unos instantes")
     }
+
+
 });
 
 dni.on('message', (ctx) => {
@@ -78,43 +95,60 @@ dni.on('message', (ctx) => {
 /////////////////////////////// Email Scene
 const email = new Scene('email');
 email.enter((ctx) => {
-    if (_.contains(Admins, ctx.message.from.id)) {
-        ctx.reply("Introduce email del votante.");
+
+    if (ctx.message && ctx.message.from && ctx.message.from.id) {
+        if (_.contains(Admins, ctx.message.from.id)) {
+            ctx.reply("Introduce email del votante.");
+        } else {
+            ctx.reply("No autorizado.");
+        }
+
     } else {
-        ctx.reply("No autorizado.");
+        console.error("User ID not found. can't proceed.");
+        ctx.reply("Parece que no puedo encontrar tu ID de usuario. Vuelve a intentarlo en unos instantes")
     }
+
+
 });
 
 email.on('message', (ctx) => {
-    if (_.contains(Admins, ctx.message.from.id)) {
-        if (EmailValidator.validate(ctx.message.text)) {
-            ctx.session.email = ctx.message.text;
-            ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text);
 
-            let docClient = new AWS.DynamoDB;
-            let query = {
-                TableName: "voter_email",
-                Key: {
-                    'user': {"S": ctx.session.cypEmail.toString()},
-                }
-            };
-            docClient.getItem(query, function (err, data) {
-                if (err) {
-                    console.error("[INFO] - Email unable to query. Error:", JSON.stringify(err, null, 2));
-                } else if (data.Item) {
-                    console.log("[INFO] - Email already exists...");
-                    ctx.reply("Este email ya existe en la base de datos. Introduce otro email.")
-                } else {
 
-                    ctx.scene.enter('verify');
-                }
-            });
+    if (ctx.message && ctx.message.from && ctx.message.from.id) {
+        if (_.contains(Admins, ctx.message.from.id)) {
+            if (EmailValidator.validate(ctx.message.text)) {
+                ctx.session.email = ctx.message.text.toLowerCase();
+                ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text.toLowerCase());
+
+                let docClient = new AWS.DynamoDB;
+                let query = {
+                    TableName: "voter_email",
+                    Key: {
+                        'user': {"S": ctx.session.cypEmail.toString()},
+                    }
+                };
+                docClient.getItem(query, function (err, data) {
+                    if (err) {
+                        console.error("[INFO] - Email unable to query. Error:", JSON.stringify(err, null, 2));
+                    } else if (data.Item) {
+                        console.log("[INFO] - Email already exists...");
+                        ctx.reply("Este email ya existe en la base de datos. Introduce otro email.")
+                    } else {
+                        ctx.scene.enter('verify');
+                    }
+                });
+            } else {
+                ctx.reply("Email incorrecto. Verifica que lo has escrito correctamente.")
+            }
         } else {
-            ctx.reply("Email incorrecto. Verifica que lo has escrito correctamente.")
+            ctx.reply("No autorizado.");
         }
+
     } else {
-        ctx.reply("No autorizado.");
+        console.error("User ID not found. can't proceed.");
+        ctx.reply("Parece que no puedo encontrar tu ID de usuario. Vuelve a intentarlo en unos instantes")
     }
+
 
 });
 ///////////////////////////////
@@ -190,8 +224,13 @@ bot.use(stage.middleware());
 console.log("[INFO] - Init...");
 
 bot.command('start', (ctx) => {
-    console.log("[INFO] - Start command");
-    ctx.scene.enter('greeter')
+
+    if (_.contains(Admins, ctx.message.from.id)) {
+        console.log("[INFO] - Start command");
+        ctx.scene.enter('greeter')
+    } else {
+        ctx.reply("No autorizado.");
+    }
 
 });
 
