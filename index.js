@@ -12,6 +12,9 @@ const Admins = process.env.ADMIN_ID_LIST.split(',').map(Number);
 AWS.config.update({region: 'eu-west-1'});
 
 
+const db = new AWS.DynamoDB;
+const docClient = new AWS.DynamoDB.DocumentClient();
+
 /////////////////////////////// Greeter Scene
 const greeter = new Scene('greeter');
 greeter.enter((ctx) => {
@@ -63,7 +66,7 @@ dni.on('message', (ctx) => {
         ctx.session.cypID = CryptoJS.SHA3(ctx.message.text.toUpperCase());
 
         //Let's check if DNI exists...
-        let docClient = new AWS.DynamoDB;
+
         let query = {
             TableName: "voter_email",
             IndexName: "nid-index",
@@ -73,7 +76,7 @@ dni.on('message', (ctx) => {
             }
         };
 
-        docClient.query(query, function (err, data) {
+        db.query(query, function (err, data) {
             console.log(JSON.stringify(data));
             if (err) {
                 console.error("[INFO] - NID unable to query. Error:", JSON.stringify(err, null, 2));
@@ -120,14 +123,14 @@ email.on('message', (ctx) => {
                 ctx.session.email = ctx.message.text.toLowerCase();
                 ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text.toLowerCase());
 
-                let docClient = new AWS.DynamoDB;
+
                 let query = {
                     TableName: "voter_email",
                     Key: {
                         'user': {"S": ctx.session.cypEmail.toString()},
                     }
                 };
-                docClient.getItem(query, function (err, data) {
+                db.getItem(query, function (err, data) {
                     if (err) {
                         console.error("[INFO] - Email unable to query. Error:", JSON.stringify(err, null, 2));
                     } else if (data.Item) {
@@ -170,7 +173,7 @@ verify.on('callback_query', ctx => {
     if (_.isEqual("Sí", ctx.callbackQuery.data)) {
         ctx.answerCbQuery("Sí");
 
-        let docClient = new AWS.DynamoDB.DocumentClient();
+
         let item = {
             TableName: 'voter_email',
             Item: {
