@@ -60,37 +60,43 @@ dni.enter((ctx) => {
 });
 
 dni.on('message', (ctx) => {
-    let dniRaw = ctx.message.text;
-    if (validateID(dniRaw)) {
-        ctx.session.dni = ctx.message.text;
-        ctx.session.cypID = CryptoJS.SHA3(ctx.message.text.toUpperCase());
+    if(ctx.message.text){
+        let dniRaw = ctx.message.text;
+        if (validateID(dniRaw)) {
+            ctx.session.dni = ctx.message.text;
+            ctx.session.cypID = CryptoJS.SHA3(ctx.message.text.toUpperCase());
 
-        //Let's check if DNI exists...
+            //Let's check if DNI exists...
 
-        let query = {
-            TableName: "voter_email",
-            IndexName: "nid-index",
-            KeyConditionExpression: "nid = :nid",
-            ExpressionAttributeValues: {
-                ":nid": {"S": ctx.session.cypID.toString()}
-            }
-        };
+            let query = {
+                TableName: "voter_email",
+                IndexName: "nid-index",
+                KeyConditionExpression: "nid = :nid",
+                ExpressionAttributeValues: {
+                    ":nid": {"S": ctx.session.cypID.toString()}
+                }
+            };
 
-        db.query(query, function (err, data) {
-            console.log(JSON.stringify(data));
-            if (err) {
-                console.error("[INFO] - NID unable to query. Error:", JSON.stringify(err, null, 2));
-            } else if (data.Count > 0) {
-                console.log("[INFO] - National ID number found. User can't be registered.");
-                ctx.reply("NIF/NIE ya registrado. Este usuario no puede volver a ser registrado. Introduce otro NIF/NIE.")
-            } else if (data.Count === 0) {
-                console.log("[INFO] - National ID not found, proceed...");
-                ctx.scene.enter('email');
-            }
-        });
-    } else {
+            db.query(query, function (err, data) {
+                console.log(JSON.stringify(data));
+                if (err) {
+                    console.error("[INFO] - NID unable to query. Error:", JSON.stringify(err, null, 2));
+                } else if (data.Count > 0) {
+                    console.log("[INFO] - National ID number found. User can't be registered.");
+                    ctx.reply("NIF/NIE ya registrado. Este usuario no puede volver a ser registrado. Introduce otro NIF/NIE.")
+                } else if (data.Count === 0) {
+                    console.log("[INFO] - National ID not found, proceed...");
+                    ctx.scene.enter('email');
+                }
+            });
+        } else {
+            ctx.reply("NIF/NIE incorrecto, verifica que lo has introducido correctamente (incluye la letra).")
+        }
+
+    }else{
         ctx.reply("NIF/NIE incorrecto, verifica que lo has introducido correctamente (incluye la letra).")
     }
+
 });
 ///////////////////////////////
 
@@ -115,43 +121,44 @@ email.enter((ctx) => {
 });
 
 email.on('message', (ctx) => {
+    if(ctx.message.text){
+        if (ctx.message && ctx.message.from && ctx.message.from.id) {
+            if (_.contains(Admins, ctx.message.from.id)) {
+                if (EmailValidator.validate(ctx.message.text)) {
+                    ctx.session.email = ctx.message.text.toLowerCase();
+                    ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text.toLowerCase());
 
 
-    if (ctx.message && ctx.message.from && ctx.message.from.id) {
-        if (_.contains(Admins, ctx.message.from.id)) {
-            if (EmailValidator.validate(ctx.message.text)) {
-                ctx.session.email = ctx.message.text.toLowerCase();
-                ctx.session.cypEmail = CryptoJS.SHA3(ctx.message.text.toLowerCase());
-
-
-                let query = {
-                    TableName: "voter_email",
-                    Key: {
-                        'user': {"S": ctx.session.cypEmail.toString()},
-                    }
-                };
-                db.getItem(query, function (err, data) {
-                    if (err) {
-                        console.error("[INFO] - Email unable to query. Error:", JSON.stringify(err, null, 2));
-                    } else if (data.Item) {
-                        console.log("[INFO] - Email already exists...");
-                        ctx.reply("Este email ya existe en la base de datos. Introduce otro email.")
-                    } else {
-                        ctx.scene.enter('verify');
-                    }
-                });
+                    let query = {
+                        TableName: "voter_email",
+                        Key: {
+                            'user': {"S": ctx.session.cypEmail.toString()},
+                        }
+                    };
+                    db.getItem(query, function (err, data) {
+                        if (err) {
+                            console.error("[INFO] - Email unable to query. Error:", JSON.stringify(err, null, 2));
+                        } else if (data.Item) {
+                            console.log("[INFO] - Email already exists...");
+                            ctx.reply("Este email ya existe en la base de datos. Introduce otro email.")
+                        } else {
+                            ctx.scene.enter('verify');
+                        }
+                    });
+                } else {
+                    ctx.reply("Email incorrecto. Verifica que lo has escrito correctamente.")
+                }
             } else {
-                ctx.reply("Email incorrecto. Verifica que lo has escrito correctamente.")
+                ctx.reply("No autorizado.");
             }
+
         } else {
-            ctx.reply("No autorizado.");
+            console.error("User ID not found. can't proceed.");
+            ctx.reply("Parece que no puedo encontrar tu ID de usuario. Vuelve a intentarlo en unos instantes")
         }
-
-    } else {
-        console.error("User ID not found. can't proceed.");
-        ctx.reply("Parece que no puedo encontrar tu ID de usuario. Vuelve a intentarlo en unos instantes")
+    }else{
+        ctx.reply("Email incorrecto. Verifica que lo has escrito correctamente.")
     }
-
 
 });
 ///////////////////////////////
@@ -163,15 +170,17 @@ verify.enter((ctx) => {
     ctx.replyWithMarkdown("Vas a inscribir el usuario con NIF/NIE: " + ctx.session.dni + " y email: " + ctx.session.email + " en el censo. ¿Es correcto?", Extra.HTML().markup((m) =>
         m.inlineKeyboard([
             m.callbackButton('Sí', 'Sí'),
-            m.callbackButton('No', 'no')
+            m.callbackButton('No', 'No')
         ])))
 });
 
 
 verify.on('callback_query', ctx => {
     console.log("[INFO] - Verifying");
+    ctx.editMessageText("\"Vas a inscribir el usuario con NIF/NIE: \" + ctx.session.dni + \" y email: \" + ctx.session.email + \" en el censo. ¿Es correcto?\"");
     if (_.isEqual("Sí", ctx.callbackQuery.data)) {
         ctx.answerCbQuery("Sí");
+
 
 
         let item = {
@@ -192,9 +201,10 @@ verify.on('callback_query', ctx => {
             }
         });
         ctx.reply("Usuario correctamente registrado. Por seguridad, borra el historial de esta conversación.\nPulsa /start para volver a empezar");
-    } else {
+    } else if (_.isEqual("No", ctx.callbackQuery.data)){
         ctx.answerCbQuery("No");
-        ctx.scene.enter('dni')
+        leave();
+        ctx.reply("Usuario no registrado.\nPulsa /start para volver a empezar");
 
     }
 
