@@ -177,7 +177,7 @@ verify.enter((ctx) => {
 
 verify.on('callback_query', ctx => {
     console.log("[INFO] - Verifying");
-    ctx.editMessageText("\"Vas a inscribir el usuario con NIF/NIE: \" + ctx.session.dni + \" y email: \" + ctx.session.email + \" en el censo. ¿Es correcto?\"");
+    ctx.editMessageText("Vas a inscribir el usuario con NIF/NIE: " + ctx.session.dni + " y email: " + ctx.session.email + " en el censo. ¿Es correcto?");
     if (_.isEqual("Sí", ctx.callbackQuery.data)) {
         ctx.answerCbQuery("Sí");
 
